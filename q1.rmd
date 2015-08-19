@@ -1,0 +1,20 @@
+---
+title: "paskek_q1"
+output: pdf_document
+---
+
+#Question 1
+  
+```{r, echo = FALSE}
+flights <- read.csv('C:\\Users\\Kathleen\\Downloads\\STA380-master\\STA380-master\\data\\ABIA.csv', header = TRUE)
+summary(flights)
+library(dplyr)
+library(mosaic)
+```
+The following shows the number of cancelled flights by destination and airline leaving Austin. In otherwords, which locations not to fly to from Austin given the high number of cancellations. 
+```{r}
+counts <- table(flights$UniqueCarrier, flights$Dest)
+barplot(counts, main="Cancelled Flights from Austin by Destination and Airline in 2008",
+        xlab="Destination", 
+        legend = rownames(counts)) 
+```

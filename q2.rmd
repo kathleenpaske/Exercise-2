@@ -1,0 +1,157 @@
+---
+title: "paskek_q2"
+output: pdf_document
+---
+  ```{r, echo = FALSE}
+library(tm)
+library(randomForest)
+library(e1071)
+library(rpart)
+library(ggplot2)
+library(caret)
+
+readerPlain = function(fname){
+  readPlain(elem=list(content=readLines(fname)), id=fname, language='en') }
+```
+
+##Setting up the training data
+The first step is to read in the libraries, followed by setting up the training data
+
+```{r, echo = FALSE}
+authors = Sys.glob('C:\\Users\\Kathleen\\Desktop\\MSBA\\STA380-master\\data\\ReutersC50\\C50train\\*')
+list_files = NULL
+train_labels = NULL
+for(author in authors) {
+  name = substring(author, first=23)
+  add_file = Sys.glob(paste0(author, '/*.txt'))
+  list_files = append(list_files, add_file)
+  train_labels = append(train_labels, rep(name, length(add_file)))
+}
+```
+Next is to cleanup the names and initialize the trianing data set
+```{r, echo-FALSE}
+all_files = lapply(list_files, readerPlain) 
+names(all_files) = list_files
+names(all_files) = sub('.txt', '', names(all_files))
+
+
+train_corpus = Corpus(VectorSource(all_files))
+names(train_corpus) = list_files
+```
+
+After this has been done, the training data set needs to be tokenized, which sets the data up to be used
+```{r, echo=FALSE}
+train_corpus = tm_map(train_corpus, content_transformer(tolower)) 
+train_corpus = tm_map(train_corpus, content_transformer(removeNumbers)) 
+train_corpus = tm_map(train_corpus, content_transformer(removePunctuation)) 
+train_corpus = tm_map(train_corpus, content_transformer(stripWhitespace)) 
+train_corpus = tm_map(train_corpus, content_transformer(removeWords), stopwords("SMART"))
+```
+
+After the tokenization the matrix can be created
+```{r, echo = FALSE}
+DTM_train = DocumentTermMatrix(train_corpus)
+DTM_train = removeSparseTerms(DTM_train, 0.975)
+```
+
+
+##Setting up the test data
+
+The first step is to read in the data
+```{r, echo = FALSE}
+authors = Sys.glob('C:\\Users\\Kathleen\\Desktop\\MSBA\\STA380-master\\data\\ReutersC50\\C50test\\*')
+list_files = NULL
+labels_for_test = NULL
+for(author in authors) {
+  name = substring(author, first=22)
+  add_file = Sys.glob(paste0(author, '/*.txt'))
+  list_files = append(list_files, add_file)
+  labels_for_test = append(labels_for_test, rep(name, length(add_file)))
+}
+```
+
+As with the training data the documents need to be cleaned up and made to be uniform, then initialized followed by tokenization.
+```{r, echo=FALSE}
+all_files = lapply(list_files, readerPlain) 
+names(all_files) = list_files
+names(all_files) = sub('.txt', '', names(all_files))
+
+test_set = Corpus(VectorSource(all_files))
+names(test_set) = list_files
+
+test_set = tm_map(test_set, content_transformer(tolower)) 
+test_set = tm_map(test_set, content_transformer(removeNumbers)) 
+test_set = tm_map(test_set, content_transformer(removePunctuation)) 
+test_set = tm_map(test_set, content_transformer(stripWhitespace)) 
+test_set = tm_map(test_set, content_transformer(removeWords), stopwords("SMART"))
+```
+
+##DICTIONARY CREATION 
+
+In order to use all the files, we set up a dictionary of terms, i.e. author names to iterate over. 
+
+```{r, echo = FALSE}
+author_dictionary = NULL
+author_dictionary = dimnames(DTM_train)[[2]]
+```
+After the dictionary has been created, essentially joining all the files, the test matrix is created.  
+
+```{r, echo = FALSE}
+DTM_test = DocumentTermMatrix(test_set, list(dictionary=author_dictionary))
+DTM_test = removeSparseTerms(DTM_test, 0.975)
+```
+From here the matrix is converted to a dataframe.
+
+```{r, echo = FALSE}
+DTM_train_df = as.data.frame(inspect(DTM_train))
+DTM_test_df = as.data.frame(inspect(DTM_test))
+```
+
+## Random Forest; Model 1
+
+To allow for differences in the training and test data set 'dictionaries' empty columns are added to the matrix. 
+
+```{r, echo=FALSE}
+DTM_test = as.matrix(DTM_test)
+DTM_train = as.matrix(DTM_train)
+xx <- data.frame(DTM_test[,intersect(colnames(DTM_test), colnames(DTM_train))])
+yy <- read.table(textConnection(""), col.names = colnames(DTM_train), colClasses = "integer")
+library(plyr)
+DTM_clean_test_set = rbind.fill(xx, yy)
+DTM_test_df = as.data.frame(DTM_clean_test_set)
+```
+To keep the model simple, I selected 100 trees and generated a random forest as can be seen below 
+
+```{r}
+RF_authors = randomForest(x=DTM_train_df, y=as.factor(train_labels), mtry=3, ntree=100)
+RF_words = predict(RF_authors, data=DTM_clean_test_set)
+
+RF_table = as.data.frame(table(RF_words,labels_for_test))
+
+plot = ggplot(RF_table)
+plot + geom_tile(aes(x=labels_for_test, y=RF_words, fill=Freq)) + scale_x_discrete(name="Actual Class") + scale_y_discrete(name="Predicted Class") + theme(axis.text.x = element_text(angle = 180, hjust = 1))
+```
+The Random forest predicts the model well. The line look almost exactly like 'y=x' demonstrating almost perfect predictability and nearly positive 1 coorelation (aka perfectly coorelated)
+
+
+## Naive Bayes; Model 2
+
+While random forest produced a good model, it is always good practice to use multiple models to check results. Here I used naive bayyes with a laplace smoothing factor of 0
+
+```{r, echo = FALSE}
+NB_authors = naiveBayes(x=DTM_train_df, y=as.factor(train_labels), laplace=0)
+NB_words = predict(NB_authors, DTM_test_df)
+NB_table = as.data.frame(table(NB_words,labels_for_test))
+```
+
+The image generated below demonstrates a linear trend but with three, maybe four authors that stand out. 
+```{r}
+plot = ggplot(NB_table)
+plot + geom_tile(aes(x=labels_for_test, y=NB_words, fill=Freq)) + scale_x_discrete(name="Actual Class") + scale_y_discrete(name="Predicted Class") + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+The graphs demonstrate that random forests is a better model over naive bayes as could be expected. This can be seen by the better fit. 
+
+
+
+

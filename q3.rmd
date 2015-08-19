@@ -1,0 +1,25 @@
+---
+title: "paskek_q3"
+output: pdf_document
+---
+
+#Question 3
+```{r}
+library(arules) 
+library(tm)
+grocery = read.transactions("C:/Users/Kathleen/Downloads/STA380-master/STA380-master/data/groceries.txt", format = 'basket', sep = ",")
+grocerytrans = as(grocery, "transactions")
+summary(grocerytrans)
+```
+
+##Using the Apriori algorithm 
+This algorithm is used for frequent item set mining, i.e. basket analysis, and association between factors, i.e. products bought together. This algorithm allows us to determine which products will be purchased together or what else might be bought by people who purchase a grouping of other items. This algorithm produces 5688 rules
+
+```{r}
+groceryrules <- apriori(grocerytrans,parameter=list(support=.001, confidence=.5, maxlen=6))
+```
+
+From here we are able to run the inspect function to see which products are often bought together, i.e. the consumers basket. This allows further investigatino into the types of customers shopping and what tends to be purchased together. The following code would be used for this purpose.
+  inspect("groceryrules")
+The output would show which products can be grouped together as common baskets. *However; the code will not knit. 
+
